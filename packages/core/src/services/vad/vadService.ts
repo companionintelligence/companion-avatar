@@ -12,6 +12,8 @@ interface UseVADServiceProps {
   onVADResult?: (result: VADResult) => void
   onSpeechStart?: () => void
   onSpeechEnd?: (audio: ArrayBuffer) => void
+  /** The mic was wanted and could not be opened. Nothing is listening, and nothing retries. */
+  onUnavailable?: (error: unknown) => void
 }
 
 /** Loads the detector without opening the microphone; the controller starts it when it is wanted. */
@@ -87,7 +89,8 @@ export const useVADService = ({
   config: configPartial = {},
   onVADResult,
   onSpeechStart,
-  onSpeechEnd
+  onSpeechEnd,
+  onUnavailable
 }: UseVADServiceProps = {}) => {
   const config = useMemo(() => ({ ...defaultVadConfig, ...configPartial }), [configPartial])
 
@@ -96,9 +99,9 @@ export const useVADService = ({
 
   // The caller passes a new config object and new callbacks on every render. They are read through
   // refs, so the actions below keep one identity and a render never starts or loads anything.
-  const latestRef = useRef({ config, onVADResult, onSpeechStart, onSpeechEnd })
+  const latestRef = useRef({ config, onVADResult, onSpeechStart, onSpeechEnd, onUnavailable })
   useLayoutEffect(() => {
-    latestRef.current = { config, onVADResult, onSpeechStart, onSpeechEnd }
+    latestRef.current = { config, onVADResult, onSpeechStart, onSpeechEnd, onUnavailable }
   })
 
   useEffect(()=>{console.log("set listening" , isListening)},[isListening])
@@ -127,7 +130,8 @@ export const useVADService = ({
             latestRef.current.onSpeechEnd?.(audio)
           }
         }),
-      onListeningChange: setIsListening
+      onListeningChange: setIsListening,
+      onUnavailable: (error) => latestRef.current.onUnavailable?.(error)
     })
     return created
   })

@@ -3,7 +3,8 @@
 #
 # There is deliberately NO _redirects file next to this one. Pages already routes any path
 # that matches no asset to the SPA on its own (it does that whenever the build has no
-# top-level 404.html, which this one does not) — and a `/* /index.html 200` rule would make
+# top-level 404.html, which this one does not; under /assets/ it answers 404 instead,
+# because of assets/404.html) — and a `/* /index.html 200` rule would make
 # things worse, not better: Pages applies _redirects "regardless of whether or not an asset
 # matches the incoming request", so a catch-all rewrite would serve index.html in place of
 # every hashed JS chunk and every avatar file.

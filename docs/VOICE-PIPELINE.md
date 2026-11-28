@@ -17,13 +17,17 @@ Orchestrated in `services/useAgent.ts`; the LLM breath-chunking that paces TTS l
 
 ## 2. Current components
 
-- **STT** (`services/stt/`) — browser **Web Speech API** (`SpeechRecognition`), `en-US`, continuous.
-  Optional `remote` flag exists but no remote STT is wired.
+- **STT** (`services/stt/`) — browser **Web Speech API** (`SpeechRecognition`), `en-US`, continuous. On
+  Chromium it sends the audio to the browser vendor. With `stt.remote` on it is not started, and each utterance
+  the VAD captures goes to the proxy's `/api/stt` (`remoteStt.ts`) instead.
 - **VAD** (`services/vad/`) — `@ricky0123/vad-web`, gates STT so it only listens when you're speaking;
   also the barge-in trigger. Its worklet, model and onnxruntime files ship with the app
   (`scripts/vite-vad-assets.mjs`; `services/vad/vadAssets.ts` gives MicVAD their folder).
   `services/vad/micVadController.ts` owns the one detector and its microphone tracks: the mic opens
   only if it is still wanted when the load ends, and turning it off stops the tracks at once.
+  Turning the mic setting off also drops what was heard and is not a turn yet (the recognizer's late result, or
+  a transcription still out). If the mic is wanted and cannot be opened (refused, or the detector fails to load
+  or start), `useAgent` calls `onMicUnavailable` and both apps turn the setting off.
 - **TTS** (`services/tts/`) — four selectable modes (`TTSConfig.mode`):
   - `browser` — `speechSynthesis`.
   - `local` — a Web Worker running **vits-web** (Piper VITS models) loaded from a CDN.

@@ -48,6 +48,8 @@ interface BaseSpeechRecognition {
   interimResults: boolean
   start(): void
   stop(): void
+  /** Stops without returning a result for what has been heard. */
+  abort(): void
   onstart: (() => void) | null
   onend: (() => void) | null
   onerror: ((event: Event) => void) | null
@@ -102,10 +104,14 @@ export const useSTTService = ({
   const rcounterRef = useRef(1)
   const bcounterRef = useRef(1)
   const activeRef = useRef(false)
+  /** Set by discard(): results are ignored until a new session has started. */
+  const droppedRef = useRef(false)
   const retryRef = useRef({ count: 0, timerId: 0 as number | undefined })
 
   const initRecognition = useCallback(() => {
-    if (recognitionRef.current) return
+    // With remote speech-to-text the app transcribes through its own server, so the browser's recognizer, which
+    // would also send the audio to the browser vendor, is never made.
+    if (recognitionRef.current || config.remote) return
 
     const windowWithSpeech = window as WindowWithSpeech
 
@@ -130,6 +136,8 @@ export const useSTTService = ({
       if (activeRef.current) return
       try {
         recognition.start()
+        // start() throws until the last session has ended, so nothing that session heard can still arrive.
+        droppedRef.current = false
       } catch {
         console.error('STT: recognizer started but with error')
       }
@@ -237,6 +245,7 @@ export const useSTTService = ({
     }
 
     recognition.onresult = (event: SpeechRecognitionEventType) => {
+      if (droppedRef.current) return
       for (const { text, final, confidence } of collectRecognitionResults(event)) {
         const comment = `User vocalization ${bcounterRef.current} final ${final}`
 
@@ -272,17 +281,37 @@ export const useSTTService = ({
     recognition.kick = kick
 
     recognitionRef.current = recognition
-  }, [desired, allowed, onPerform, onInterimTranscript, config.continuous, config.language])
+  }, [desired, allowed, onPerform, onInterimTranscript, config.continuous, config.language, config.remote])
 
   const updateListening = useCallback(() => {
     if (!recognitionRef.current) return
 
-    if (allowed && desired) {
+    if (allowed && desired && !config.remote) {
       recognitionRef.current.start2()
     } else {
       recognitionRef.current.stop2()
     }
-  }, [allowed, desired])
+  }, [allowed, desired, config.remote])
+
+  /**
+   * Drops whatever the recognizer has heard and not yet reported, so it never becomes a turn. Chromium ignores
+   * abort() after stop() and still returns a result, so results are also ignored until a new session starts.
+   */
+  const discard = useCallback(() => {
+    droppedRef.current = true
+    const recognition = recognitionRef.current
+    if (!recognition) return
+    if (retryRef.current.timerId) {
+      clearTimeout(retryRef.current.timerId)
+      retryRef.current.timerId = undefined
+    }
+    try {
+      recognition.abort()
+    } catch {
+      // It was not running.
+    }
+    activeRef.current = false
+  }, [])
 
   const setAllowedState = useCallback((state: boolean) => {
     setAllowed(state)
@@ -322,9 +351,10 @@ export const useSTTService = ({
       setAllowed: setAllowedState,
       setDesired: setDesiredState,
       startListening: () => setDesiredState(true),
-      stopListening: () => setDesiredState(false)
+      stopListening: () => setDesiredState(false),
+      discard
     }),
-    [setAllowedState, setDesiredState]
+    [setAllowedState, setDesiredState, discard]
   )
 
   return useMemo(

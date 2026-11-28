@@ -32,6 +32,8 @@ export interface MicVADControllerOptions {
   openStream?: () => Promise<MediaStream>
   onListeningChange?: (listening: boolean) => void
   onError?: (message: string, error: unknown) => void
+  /** The mic was wanted and the detector failed to load or start, so it is no longer wanted. */
+  onUnavailable?: (error: unknown) => void
 }
 
 export interface MicVADController {
@@ -54,12 +56,14 @@ export const createMicVADController = ({
   load,
   openStream = openMicrophone,
   onListeningChange,
-  onError = (message, error) => console.error(message, error)
+  onError = (message, error) => console.error(message, error),
+  onUnavailable
 }: MicVADControllerOptions): MicVADController => {
   let wanted = false
   let released = false
   let instance: MicVADInstance | null = null
   let loading: Promise<MicVADInstance | null> | null = null
+  let loadError: unknown
   /** The library has been started and not paused since. */
   let capturing = false
   /** A track was stopped under the library, so it has to be paused before it can listen again. */
@@ -96,7 +100,7 @@ export const createMicVADController = ({
     try {
       await vad.destroy?.()
     } catch {
-      // vad-web's destroy() throws on a detector that never opened the microphone: nothing to close.
+      // vad-web's destroy() throws on a detector that never opened the microphone: no microphone to close.
     }
   }
 
@@ -122,6 +126,7 @@ export const createMicVADController = ({
       },
       (error: unknown) => {
         loading = null
+        loadError = error
         onError('Failed to initialize VAD:', error)
         return null
       }
@@ -129,11 +134,18 @@ export const createMicVADController = ({
     return loading
   }
 
+  /** Stops wanting a mic that cannot be had, and says so if it was still wanted. */
+  const giveUp = (error: unknown) => {
+    if (!wanted) return
+    wanted = false
+    onUnavailable?.(error)
+  }
+
   const startStep = async () => {
     const vad = await ensureLoaded()
     if (!vad) {
       // It could not load. Wait to be asked again rather than retrying in a loop.
-      wanted = false
+      giveUp(loadError)
       return
     }
     if (!wanted) return
@@ -142,8 +154,8 @@ export const createMicVADController = ({
       await vad.start()
     } catch (error) {
       // vad-web cannot start a detector again after its start failed.
-      wanted = false
       onError('Failed to start VAD:', error)
+      giveUp(error)
       await discard()
       return
     }

@@ -21,14 +21,14 @@ test('turning the microphone on starts the voice-activity detector with its own 
   await page.goto('/')
   await page.getByText('Enable Mic').click({ timeout: 60_000 })
 
-  // The status pill says "Listening" only once MicVAD.new has resolved: the worklet, the model and
+  // The status pill says "Listening" only once the detector's start() has resolved: the worklet, the model and
   // onnxruntime loaded. The open control panel hides the pill, so it is read, not looked at. (The
   // mic button's tooltip follows the toggle, not the detector, and would pass without it.)
   await expect(page.locator('[role="status"][aria-label="Listening"]')).toBeAttached({ timeout: 45_000 })
   expect(failures).toEqual([])
 
   // Chromium does not report an audio worklet's own fetch, so the worklet is not in this list;
-  // MicVAD.new could not have resolved without it.
+  // start() could not have resolved without it.
   expect([...new Set(answers.map((answer) => answer.file))]).toEqual(
     expect.arrayContaining(['silero_vad_v5.onnx', 'ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm'])
   )
@@ -120,4 +120,30 @@ test('turning the microphone off leaves no track live, also after taps while the
   expect(speechStarts, 'speech events with the mic off').toBe(0)
   expect(await page.evaluate(() => (window as unknown as MicWindow).__recognitionStarts), 'speech recognition starts with the mic off').toBe(after)
   expect(modelRequests).toBe(1)
+})
+
+/** A refused mic leaves the setting off, so the Mic button does not read on with nothing listening. */
+test('a microphone the browser then refuses leaves the Mic button off', async ({ page }) => {
+  // The first request is Enable Mic's own permission check. The detector's, which follows, is refused.
+  await page.addInitScript(() => {
+    const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    let requests = 0
+    navigator.mediaDevices.getUserMedia = (constraints) =>
+      ++requests === 1
+        ? getUserMedia(constraints)
+        : Promise.reject(new DOMException('Permission denied', 'NotAllowedError'))
+  })
+  const refused: string[] = []
+  page.on('console', (message) => {
+    if (message.text().includes('Failed to start VAD')) refused.push(message.text())
+  })
+
+  await page.goto('/')
+  await page.getByText('Enable Mic').click({ timeout: 60_000 })
+
+  await expect.poll(() => refused.length, { timeout: 45_000 }).toBe(1)
+  await expect(page.getByRole('button', { name: 'Mic', exact: true })).toBeVisible()
+  // Off, and not tried again on its own.
+  await page.waitForTimeout(2_000)
+  expect(refused).toHaveLength(1)
 })

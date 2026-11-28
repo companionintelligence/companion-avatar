@@ -15,9 +15,16 @@ const setup = () => {
   })
   const onListeningChange = vi.fn()
   const onError = vi.fn()
-  const controller = createMicVADController({ load, openStream: mic.openStream, onListeningChange, onError })
+  const onUnavailable = vi.fn()
+  const controller = createMicVADController({
+    load,
+    openStream: mic.openStream,
+    onListeningChange,
+    onError,
+    onUnavailable
+  })
   const listening = () => onListeningChange.mock.lastCall?.[0] ?? false
-  return { mic, load, loads, controller, listening, onError }
+  return { mic, load, loads, controller, listening, onError, onUnavailable }
 }
 
 /** Loaded and listening. */
@@ -176,6 +183,50 @@ describe('createMicVADController', () => {
 
     void t.controller.start()
     expect(t.load).toHaveBeenCalledTimes(2)
+  })
+
+  it('says the mic is unavailable when it was wanted and the load or the start fails', async () => {
+    const t = setup()
+    const noModel = new Error('text/html')
+    void t.controller.start()
+    t.loads[0].fail(noModel)
+    await flush()
+    expect(t.onUnavailable.mock.calls).toEqual([[noModel]])
+    expect(t.controller.isWanted()).toBe(false)
+
+    const noWorklet = new Error('no worklet')
+    const worklet = deferred()
+    void t.controller.start()
+    t.loads[1].vad.worklet = worklet.promise
+    t.loads[1].finish()
+    await flush()
+    worklet.reject(noWorklet)
+    await flush()
+    expect(t.onUnavailable.mock.calls).toEqual([[noModel], [noWorklet]])
+  })
+
+  it('says nothing of a failure after the mic was turned off, or of a load nobody wanted it from', async () => {
+    const t = setup()
+    void t.controller.load()
+    t.loads[0].fail(new Error('text/html'))
+    await flush()
+
+    void t.controller.start()
+    void t.controller.stop()
+    t.loads[1].fail(new Error('text/html'))
+    await flush()
+
+    const worklet = deferred()
+    void t.controller.start()
+    t.loads[2].vad.worklet = worklet.promise
+    t.loads[2].finish()
+    await flush()
+    void t.controller.stop()
+    worklet.reject(new Error('no worklet'))
+    await flush()
+
+    expect(t.onUnavailable).not.toHaveBeenCalled()
+    expect(t.mic.live()).toBe(0)
   })
 
   it('release() stops the stream and destroys the detector', async () => {
