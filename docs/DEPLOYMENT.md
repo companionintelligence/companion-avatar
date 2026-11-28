@@ -256,7 +256,10 @@ it. It sets:
 - `no-cache` for `/sw.js` (the service worker, see below), so an intermediary cannot hold a stale one.
 
 **There is deliberately no `_redirects` file.** Pages already routes an unmatched path to
-the SPA by itself, because the build ships no top-level `404.html`. Adding the usual
+the SPA by itself, because the build ships no top-level `404.html`. Under `/assets/` it does
+not: `apps/web/public/assets/404.html` is the closest `404.html` there, so a file that did not
+ship answers 404 instead of `index.html` with status 200 (checked with `wrangler pages dev`;
+nginx already answered 404 there). Adding the usual
 `/* /index.html 200` SPA rule would actively break the site: Pages applies `_redirects`
 *"regardless of whether or not an asset matches the incoming request"*, so a catch-all
 rewrite serves `index.html` in place of every hashed JS chunk and every avatar file.
@@ -274,6 +277,16 @@ cache-control: public, max-age=31536000, immutable   # asset served, not shadowe
 $ curl -sI <preview>/                       # _headers applied
 permissions-policy: xr-spatial-tracking=(self), camera=(self), ...
 ```
+
+### Voice-input files
+
+The voice-activity detector (`@ricky0123/vad-web`) fetches an audio worklet, the Silero model, and onnxruntime's
+`.mjs` loader and `.wasm` when someone turns the microphone on. `scripts/vite-vad-assets.mjs`, a plugin in both apps'
+Vite configs, copies them from the installed packages into `assets/vad/<fingerprint>/` (about 15 MB, with their
+licences and ONNX Runtime's third-party notices beside them), serves the same URLs from the dev server, and writes `vad-assets.json` listing them. Every
+build carries them: Pages, the container image, the desktop app and the phone shells. The folder name changes with the
+files, because `/assets/*` is cached for a year. The container's nginx names the type of the `.mjs`, which its stock
+`mime.types` lacks; a browser will not import a module without a JavaScript type.
 
 ### Nothing secret in the build output
 
@@ -306,6 +319,9 @@ import their libraries from esm.run and cdn.jsdelivr.net. A test (`StudioEnviron
 source names a package CDN. `scripts/smoke-live.mjs` checks a deploy from a browser: it loads the page in headless
 Chromium, waits for the app to mount (a canvas in `#root`), watches until no request has started for 5 s, checks the
 app is still mounted, and fails if any request, its workers' included, went to an origin other than the page's own.
+It also reads `vad-assets.json` and sends a `HEAD` request for every voice-input file, and fails if one is missing,
+comes back as `text/html`, or is a script or `.wasm` with the wrong type: until the builds shipped these files, the
+live site answered each with `index.html`, so voice input could not start.
 
 ```bash
 pnpm smoke:live                                          # https://avatar.ci.computer
@@ -314,7 +330,8 @@ pnpm smoke:live http://127.0.0.1:4173/                   # after `vite preview` 
 gh workflow run smoke-live.yml [-f url=<url>] [-f allow=<origins>]   # the same, on a runner
 ```
 
-It only loads the page and presses nothing, so features someone has to switch on are not exercised. If one is (or a
+It only loads the page and presses nothing, so features someone has to switch on are not exercised (that voice input
+starts is `tests/vad-assets.spec.ts`, which turns the microphone on). If one is (or a
 test page needs one), `--allow <origin>` (repeatable; `SMOKE_ALLOW` or the workflow's `allow` input takes a
 comma-separated list) lets that origin through; `https://*.example.com` takes the subdomains too. The list is empty by
 default. What those features still fetch from other hosts:

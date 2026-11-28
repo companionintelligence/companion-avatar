@@ -85,6 +85,11 @@ export interface AgentCallbacks {
 
   // General callbacks
   onError?: (error: Error) => void
+  /**
+   * The mic was wanted and could not be opened: the browser refused it, or the voice detector did not load or
+   * start. Nothing is listening and nothing retries, so an app turns its mic setting off here.
+   */
+  onMicUnavailable?: (error: unknown) => void
 }
 
 // Return type for the hook
@@ -496,6 +501,9 @@ export const useAgent = (config: AgentConfig = {}, callbacks: AgentCallbacks = {
     if (cueTurnRef.current) cancelCueTurn(cueTurnRef.current)
   }, [tts.state.isSpeaking, tts.actions, emotes.actions, visemes.actions, animations.actions])
 
+  // How often the mic setting has been turned off. A transcript requested before the last time is dropped.
+  const micOffsRef = useRef(0)
+
   // Initialize VAD service
   const vad = useVADService({
     config: vadConfig,
@@ -516,10 +524,11 @@ export const useAgent = (config: AgentConfig = {}, callbacks: AgentCallbacks = {
       // Whisper instead of relying on webkitSpeechRecognition, which is
       // Chromium-only and streams the microphone to Google.
       if (!sttConfig.remote) return
+      const micOffs = micOffsRef.current
       void transcribeRemote(audio, VAD_SAMPLE_RATE, {
         language: sttConfig.language.split('-')[0]
       }).then((result) => {
-        if (!result.ok || !result.text) return
+        if (!result.ok || !result.text || micOffs !== micOffsRef.current) return
         markLatency('stt-final')
         const interrupt = Date.now()
         interruptCounterRef.current = interrupt
@@ -532,7 +541,8 @@ export const useAgent = (config: AgentConfig = {}, callbacks: AgentCallbacks = {
           interrupt
         })
       })
-    }
+    },
+    onUnavailable: (error: unknown) => callbacks.onMicUnavailable?.(error)
   })
 
   // Initialize STT service
@@ -578,7 +588,20 @@ export const useAgent = (config: AgentConfig = {}, callbacks: AgentCallbacks = {
   })
 
   // Service coordination effects
-  useEffect(() => { 
+
+  // Turning the mic setting off drops what has been heard and is not a turn yet: the recognizer's late result
+  // and a transcription still out. The end of ordinary speech only stops the recognizer, which keeps its result.
+  const micSettingRef = useRef(vadConfig.microphoneEnabled)
+  useEffect(() => {
+    const was = micSettingRef.current
+    micSettingRef.current = vadConfig.microphoneEnabled
+    if (!was || vadConfig.microphoneEnabled) return
+    micOffsRef.current++
+    stt.actions.discard()
+    setCurrentInterimTranscript('')
+  }, [vadConfig.microphoneEnabled, stt.actions])
+
+  useEffect(() => {
     stt.actions.setDesired(vad.state.isDetecting)
   }, [vad.state.isDetecting, stt.actions])
 

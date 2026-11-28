@@ -113,7 +113,11 @@ export const App = () => {
     [activationState, appState.autoSubmitEnabled, appState.bargeInEnabled, appState.microphone, llmSettings, ttsSettings, sttSettings]
   )
 
-  const agent = useAgent(agentConfig)
+  const agent = useAgent(agentConfig, {
+    // So the Mic button does not read on while nothing is listening. Turning it on again retries; after a
+    // .wasm that did not load, only a reload does.
+    onMicUnavailable: () => AppConfigState.set((prev) => ({ ...prev, microphone: false }))
+  })
 
   const handleAppStateChange = useCallback((newAppState: AppConfig) => {
     setAppState(newAppState)
@@ -226,11 +230,15 @@ export const App = () => {
           micError={!agent.state.sttAllowed ? 'Microphone access is unavailable' : null}
           showWaveform={!isMobile}
           style={controlsOpen ? { display: 'none' } : { left: 'calc(10rem + env(safe-area-inset-left))', bottom: 'calc(1.25rem + env(safe-area-inset-bottom))', maxWidth: 'calc(100% - 10rem - 1.25rem)' }}
+          // The pill and the Mic button turn the same setting, so the button never reads off while
+          // the microphone is open.
           onPillClick={() => {
+            AppConfigState.set((prev) => ({ ...prev, microphone: true }))
             agent.actions.toggleMicrophone(true)
             agent.actions.startVADListening()
           }}
           onStopClick={() => {
+            AppConfigState.set((prev) => ({ ...prev, microphone: false }))
             agent.actions.stopSpeaking()
             agent.actions.stopVADListening()
             agent.actions.toggleMicrophone(false)

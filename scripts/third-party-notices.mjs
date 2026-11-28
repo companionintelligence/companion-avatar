@@ -103,6 +103,19 @@ const LINKED_CODE = {
 }
 
 /**
+ * A work an npm package carries that is not the package's own, under its own licence. vad-web (ISC)
+ * holds Silero VAD's model, which every build of the app ships (scripts/vite-vad-assets.mjs).
+ */
+const BUNDLED_IN_NPM = {
+  '@ricky0123/vad-web': {
+    name: 'Silero VAD model (silero_vad_v5.onnx)',
+    url: 'https://github.com/snakers4/silero-vad',
+    license: 'MIT',
+    holder: 'Copyright (c) 2020-present Silero Team'
+  }
+}
+
+/**
  * Maven groups the Android app may contain, with each group's licence. Gradle keeps no lockfile
  * for this project, so the release build's resolved classpath is read and every group must be
  * listed here; an unknown group fails a strict run.
@@ -518,6 +531,19 @@ function collectNpm(part, problems) {
       templated,
       texts
     })
+    const bundled = BUNDLED_IN_NPM[name]
+    if (bundled) {
+      components.push({
+        part,
+        kind: 'bundled',
+        name: bundled.name,
+        version: `as shipped in ${name} ${version}`,
+        license: bundled.license,
+        url: bundled.url,
+        templated: false,
+        texts: [{ file: bundled.license, text: cleanText(TEMPLATES[bundled.license](bundled.holder)) }]
+      })
+    }
   }
   return components
 }

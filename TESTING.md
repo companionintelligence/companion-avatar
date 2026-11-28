@@ -207,8 +207,12 @@ pnpm test:e2e:debug   # Debug mode
 # View reports
 pnpm test:report      # Open HTML report
 
-# After a deploy: load the live site (or any URL) headless; fails if it does not mount
-# or asks any origin but its own for anything (scripts/smoke-live.mjs)
+# Voice input starts from the files the build ships, and no microphone track stays live once the
+# mic is turned off, also during the detector's load (no LLM server needed)
+pnpm exec playwright test tests/vad-assets.spec.ts --project chromium
+
+# After a deploy: load the live site (or any URL) headless; fails if it does not mount,
+# asks any origin but its own for anything, or lacks a voice-input file (scripts/smoke-live.mjs)
 pnpm smoke:live [url] [--allow https://*.arweave.net]
 ```
 

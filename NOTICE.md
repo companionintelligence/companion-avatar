@@ -9,9 +9,11 @@ for acknowledgements.
 
 The desktop app links a few Rust crates under the Mozilla Public License 2.0
 (at the time of writing `cssparser`, `dtoa-short`, `option-ext` and
-`selectors`, which Tauri uses), unmodified. Everything else the apps carry is
-under a permissive licence (MIT, Apache-2.0, ISC, BSD, Zlib, OFL-1.1 or
-similar).
+`selectors`, which Tauri uses), unmodified. Every build also carries ONNX
+Runtime's `.wasm` (see [Voice activity detection](#voice-activity-detection)),
+which is built with [Eigen](https://gitlab.com/libeigen/eigen), also under the
+Mozilla Public License 2.0. Everything else the apps carry is under a permissive
+licence (MIT, Apache-2.0, ISC, BSD, Zlib, OFL-1.1 or similar).
 
 ## Notices inside the apps
 
@@ -158,6 +160,24 @@ drei's studio preset (commit `456060a2`, 1,680,234 bytes), unchanged. CC0 asks
 for no credit; it is given because it is due. The distribution decision above
 is not what lets the apps ship it, and it does not restrict it: anyone may
 reuse this file.
+
+## Voice activity detection
+
+Every build of the app ships these files unmodified from the npm packages that
+`pnpm-lock.yaml` pins, under `assets/vad/` (`scripts/vite-vad-assets.mjs`),
+with their licence texts beside them (`LICENSES.txt`, from
+`scripts/third-party/licenses/voice-activity.txt`).
+
+| File | From | Licence |
+| --- | --- | --- |
+| `vad.worklet.bundle.min.js` | [`@ricky0123/vad-web`](https://github.com/ricky0123/vad) | ISC, Copyright (c) 2022-present ricky0123 |
+| `silero_vad_v5.onnx` | [Silero VAD](https://github.com/snakers4/silero-vad), distributed in `@ricky0123/vad-web` | MIT, Copyright (c) 2020-present Silero Team |
+| `ort-wasm-simd-threaded.mjs`, `ort-wasm-simd-threaded.wasm` | [`onnxruntime-web`](https://github.com/microsoft/onnxruntime) | MIT, Copyright (c) Microsoft Corporation |
+
+The `.wasm` also holds the libraries ONNX Runtime is built with. Their notices
+ship beside it as `ThirdPartyNotices.txt`, copied unchanged from the ONNX
+Runtime 1.23.2 Python package
+(`scripts/third-party/licenses/onnxruntime-1.23.2-ThirdPartyNotices.txt`).
 
 ## First-party code
 

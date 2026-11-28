@@ -5,6 +5,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 
 import { assertPwa } from '../../scripts/check-pwa.mjs'
 import { assertNoDistSecrets } from '../../scripts/check-dist-secrets.mjs'
+import { vadAssets } from '../../scripts/vite-vad-assets.mjs'
 
 /**
  * Fail the build when the installable app's service worker disagrees with itself: the cache
@@ -85,6 +86,8 @@ export default defineConfig({
   plugins: [
     ...(process.env.VITE_USE_SSL === 'true' ? [basicSsl()] : []),
     react(),
+    // The voice-activity detector's worklet, model and onnxruntime files, from the app's own origin.
+    vadAssets(),
     // Last, so they check the output after every other plugin has had its say.
     checkPwa(),
     checkDistSecrets()
@@ -109,14 +112,11 @@ export default defineConfig({
     // Vite's default worker format (iife) cannot split into chunks.
     format: 'es'
   },
-  optimizeDeps: {
-    // onnxruntime-web (the voice-activity model's runtime, through @ricky0123/vad-web) loads
-    // ort-wasm-simd-threaded.mjs and its .wasm from beside its own module. Pre-bundled into
-    // node_modules/.vite/deps, it looks for them there, and the dev server warned that
-    // ort-wasm-simd-threaded.mjs "does not exist ... in the optimize deps directory" (beta-red,
-    // 2026-11-25). Served from node_modules instead, its own files are where it expects them.
-    exclude: ['onnxruntime-web']
-  },
+  // No optimizeDeps.exclude for onnxruntime-web (the voice-activity model's runtime): excluded, the
+  // dev server left the pre-bundled @ricky0123/vad-web (CommonJS) with a require() no browser has
+  // ('Dynamic require of "onnxruntime-web/wasm" is not supported'), so voice input could not start
+  // there. It had been excluded so that it found its .mjs and .wasm beside its own module; the app
+  // now gives MicVAD the folder vadAssets() serves instead.
   build: {
     rollupOptions: {
       onwarn(warning, warn) {

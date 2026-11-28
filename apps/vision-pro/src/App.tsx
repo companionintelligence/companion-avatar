@@ -144,7 +144,11 @@ export const App = () => {
     ]
   )
 
-  const agent = useAgent(agentConfig)
+  const agent = useAgent(agentConfig, {
+    // So the Mic button does not read on while nothing is listening. Turning it on again retries; after a
+    // .wasm that did not load, only a reload does.
+    onMicUnavailable: () => AppConfigState.set((prev) => ({ ...prev, microphone: false }))
+  })
 
   const handleAppStateChange = useCallback(
     (newAppState: AppConfig) => {
