@@ -86,16 +86,22 @@ test('turning the microphone off leaves no track live, also after taps while the
   const mic = page.getByRole('button', { name: /^(Mic|Mic on|Listening)$/ })
   const listening = page.locator('[role="status"][aria-label="Listening"]')
 
+  // Each tap is waited for: a busy page (the avatar still loading) can miss one, which would turn "off" into "on".
+  const tapTo = async (on: boolean) => {
+    await mic.click()
+    await expect(mic).toHaveAttribute('aria-pressed', String(on), { timeout: 15_000 })
+  }
+
   await page.goto('/')
   await page.getByText('Enable Mic').click({ timeout: 60_000 })
   await expect.poll(() => modelRequests, { timeout: 45_000 }).toBeGreaterThan(0)
 
   // Off and on again, the controls hidden and shown (each a re-render), then off: all mid-load.
-  await mic.click()
-  await mic.click()
+  await tapTo(false)
+  await tapTo(true)
   await page.getByRole('button', { name: 'Hide Controls' }).click()
   await page.getByRole('button', { name: 'Show Controls' }).click()
-  await mic.click()
+  await tapTo(false)
   letModelThrough()
 
   // Long enough for every pending load to finish and, if the app let it, to open the microphone.
@@ -110,8 +116,12 @@ test('turning the microphone off leaves no track live, also after taps while the
   await mic.click()
   await expect.poll(liveTracks).toBe(0)
 
-  // Quick taps on the loaded detector, ending off.
+  // Quick taps on the loaded detector. The mic must follow what the button then says; then it is turned off.
   for (let tap = 0; tap < 6; tap += 1) await mic.click()
+  await page.waitForTimeout(1_000)
+  const on = (await mic.getAttribute('aria-pressed')) === 'true'
+  expect(await liveTracks(), 'live microphone tracks after quick taps').toBe(on ? 1 : 0)
+  if (on) await tapTo(false)
   await page.waitForTimeout(1_000)
   const after = await page.evaluate(() => (window as unknown as MicWindow).__recognitionStarts)
   speechStarts = 0
