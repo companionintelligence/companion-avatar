@@ -282,8 +282,8 @@ permissions-policy: xr-spatial-tracking=(self), camera=(self), ...
 
 The voice-activity detector (`@ricky0123/vad-web`) fetches an audio worklet, the Silero model, and onnxruntime's
 `.mjs` loader and `.wasm` when someone turns the microphone on. `scripts/vite-vad-assets.mjs`, a plugin in both apps'
-Vite configs, copies them from the installed packages into `assets/vad/<fingerprint>/` (about 14 MB, with their
-licences beside them), serves the same URLs from the dev server, and writes `vad-assets.json` listing them. Every
+Vite configs, copies them from the installed packages into `assets/vad/<fingerprint>/` (about 15 MB, with their
+licences and ONNX Runtime's third-party notices beside them), serves the same URLs from the dev server, and writes `vad-assets.json` listing them. Every
 build carries them: Pages, the container image, the desktop app and the phone shells. The folder name changes with the
 files, because `/assets/*` is cached for a year. The container's nginx names the type of the `.mjs`, which its stock
 `mime.types` lacks; a browser will not import a module without a JavaScript type.
@@ -320,8 +320,8 @@ source names a package CDN. `scripts/smoke-live.mjs` checks a deploy from a brow
 Chromium, waits for the app to mount (a canvas in `#root`), watches until no request has started for 5 s, checks the
 app is still mounted, and fails if any request, its workers' included, went to an origin other than the page's own.
 It also reads `vad-assets.json` and sends a `HEAD` request for every voice-input file, and fails if one is missing,
-comes back as `text/html`, or is a script or `.wasm` with the wrong type: before 2026-11-27 no build shipped them and
-the live site answered each with `index.html`, so voice input could not start.
+comes back as `text/html`, or is a script or `.wasm` with the wrong type: until the builds shipped these files, the
+live site answered each with `index.html`, so voice input could not start.
 
 ```bash
 pnpm smoke:live                                          # https://avatar.ci.computer

@@ -4,6 +4,8 @@
 export const VAD_DIR: string
 export const VAD_MANIFEST: string
 export const VAD_LICENSES: string
+export const VAD_ORT_NOTICES: string
+export function ortNoticesPath(version: string): string
 export const VAD_DEFINE: string
 export const VAD_FILES: { name: string; from: 'vad-web' | 'onnxruntime-web' }[]
 

@@ -5,9 +5,10 @@
  * worklet, the Silero model, and onnxruntime's .mjs loader with its .wasm. By default they look
  * beside the page ("./"), where no build put them, so a static host answered with index.html and
  * voice input never started. This plugin takes the files from the installed packages, the versions
- * pnpm-lock.yaml pins, and serves them from the app's own origin (this app loads nothing from a CDN):
+ * pnpm-lock.yaml pins, and serves them from the app's own origin:
  *
- *   - build:      <outDir>/assets/vad/<fingerprint>/<file>, with their licences beside them, and
+ *   - build:      <outDir>/assets/vad/<fingerprint>/<file>, with their licences and ONNX Runtime's
+ *                 third-party notices beside them, and
  *                 <outDir>/vad-assets.json, which lists them for scripts/smoke-live.mjs;
  *   - dev server: the same URLs, read from node_modules. A name it does not have is a 404, not the app;
  *   - the app:    `__CI_AVATAR_VAD_DIR__`, the folder relative to Vite's `base`, which
@@ -15,6 +16,9 @@
  *
  * The folder is named after the files' bytes because every host caches /assets/* for a year
  * (apps/web/public/_headers, nginx/default.conf): another version of a package gets another URL.
+ *
+ * onnxruntime-web ships no notices for what its .wasm is built with, so that release's
+ * ThirdPartyNotices.txt, as its Python package ships it, is kept in scripts/third-party/licenses/.
  *
  * It copies with node:fs and adds no dependency. Plain JavaScript, like check-pwa.mjs, so that
  * `vite build`, `deno task build` and `node` can all run it.
@@ -35,6 +39,12 @@ export const VAD_MANIFEST = 'vad-assets.json'
 
 /** The licence texts shipped beside the files. */
 export const VAD_LICENSES = 'LICENSES.txt'
+
+/** ONNX Runtime's notices for what its .wasm is built with, shipped beside it. */
+export const VAD_ORT_NOTICES = 'ThirdPartyNotices.txt'
+
+/** Where the copy for one release is kept. Another release of onnxruntime-web needs its own. */
+export const ortNoticesPath = (version) => `scripts/third-party/licenses/onnxruntime-${version}-ThirdPartyNotices.txt`
 
 /** The compile-time constant that carries the folder to packages/core. */
 export const VAD_DEFINE = '__CI_AVATAR_VAD_DIR__'
@@ -70,22 +80,20 @@ export function readVadAssets(root = ROOT) {
   const ortDist = dirname(createRequire(vadManifest).resolve('onnxruntime-web/wasm'))
   const dirs = { 'vad-web': join(dirname(vadManifest), 'dist'), 'onnxruntime-web': ortDist }
   const version = (manifest) => JSON.parse(readFileSync(manifest, 'utf8')).version
+  const versions = {
+    '@ricky0123/vad-web': version(vadManifest),
+    'onnxruntime-web': version(join(ortDist, '..', 'package.json'))
+  }
 
   const files = VAD_FILES.map(({ name, from }) => ({ name, bytes: readFileSync(join(dirs[from], name)) }))
   files.push({ name: VAD_LICENSES, bytes: readFileSync(join(root, 'scripts/third-party/licenses/voice-activity.txt')) })
+  files.push({ name: VAD_ORT_NOTICES, bytes: readFileSync(join(root, ortNoticesPath(versions['onnxruntime-web']))) })
 
   const hash = createHash('sha256')
   for (const { name, bytes } of files) hash.update(name).update('\0').update(bytes).update('\0')
   const dir = `${VAD_DIR}/${hash.digest('hex').slice(0, 12)}`
 
-  return {
-    dir,
-    files,
-    versions: {
-      '@ricky0123/vad-web': version(vadManifest),
-      'onnxruntime-web': version(join(ortDist, '..', 'package.json'))
-    }
-  }
+  return { dir, files, versions }
 }
 
 /** The manifest a build writes: the versions and the paths, relative to the app's base. */

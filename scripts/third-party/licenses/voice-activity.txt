@@ -11,8 +11,11 @@ and onnxruntime-web. They are not covered by Avatar Companion's own licence.
   ort-wasm-simd-threaded.mjs    onnxruntime-web, MIT
   ort-wasm-simd-threaded.wasm   https://github.com/microsoft/onnxruntime
                                 The .wasm also holds the libraries ONNX Runtime is
-                                built with; their notices are in
-                                ThirdPartyNotices.txt in that repository.
+                                built with. Their notices are in
+                                ThirdPartyNotices.txt, beside this file. One of
+                                them, Eigen, is under the Mozilla Public License
+                                2.0; its source is at
+                                https://gitlab.com/libeigen/eigen
 
 
 ISC License (@ricky0123/vad-web)

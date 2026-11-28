@@ -9,9 +9,11 @@ for acknowledgements.
 
 The desktop app links a few Rust crates under the Mozilla Public License 2.0
 (at the time of writing `cssparser`, `dtoa-short`, `option-ext` and
-`selectors`, which Tauri uses), unmodified. Everything else the apps carry is
-under a permissive licence (MIT, Apache-2.0, ISC, BSD, Zlib, OFL-1.1 or
-similar).
+`selectors`, which Tauri uses), unmodified. Every build also carries ONNX
+Runtime's `.wasm` (see [Voice activity detection](#voice-activity-detection)),
+which is built with [Eigen](https://gitlab.com/libeigen/eigen), also under the
+Mozilla Public License 2.0. Everything else the apps carry is under a permissive
+licence (MIT, Apache-2.0, ISC, BSD, Zlib, OFL-1.1 or similar).
 
 ## Notices inside the apps
 
@@ -172,8 +174,10 @@ with their licence texts beside them (`LICENSES.txt`, from
 | `silero_vad_v5.onnx` | [Silero VAD](https://github.com/snakers4/silero-vad), distributed in `@ricky0123/vad-web` | MIT, Copyright (c) 2020-present Silero Team |
 | `ort-wasm-simd-threaded.mjs`, `ort-wasm-simd-threaded.wasm` | [`onnxruntime-web`](https://github.com/microsoft/onnxruntime) | MIT, Copyright (c) Microsoft Corporation |
 
-The `.wasm` also holds the libraries ONNX Runtime is built with; their notices
-are in `ThirdPartyNotices.txt` in the ONNX Runtime repository.
+The `.wasm` also holds the libraries ONNX Runtime is built with. Their notices
+ship beside it as `ThirdPartyNotices.txt`, copied unchanged from the ONNX
+Runtime 1.23.2 Python package
+(`scripts/third-party/licenses/onnxruntime-1.23.2-ThirdPartyNotices.txt`).
 
 ## First-party code
 

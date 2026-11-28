@@ -10,6 +10,8 @@ import {
   VAD_FILES,
   VAD_LICENSES,
   VAD_MANIFEST,
+  VAD_ORT_NOTICES,
+  ortNoticesPath,
   readVadAssets,
   vadAssets,
   vadManifest,
@@ -22,8 +24,8 @@ const assets = readVadAssets()
 const bytesOf = (name) => assets.files.find((file) => file.name === name).bytes
 
 describe('the files', () => {
-  it('are the four the detector asks for, and their licences', () => {
-    expect(assets.files.map((file) => file.name)).toEqual([...VAD_FILES.map((file) => file.name), VAD_LICENSES])
+  it('are the four the detector asks for, their licences and ONNX Runtime\'s notices', () => {
+    expect(assets.files.map((file) => file.name)).toEqual([...VAD_FILES.map((file) => file.name), VAD_LICENSES, VAD_ORT_NOTICES])
     expect(assets.dir).toMatch(/^assets\/vad\/[0-9a-f]{12}$/)
     expect(readVadAssets().dir).toBe(assets.dir)
   })
@@ -50,6 +52,15 @@ describe('the files', () => {
     expect(text).toContain('Copyright (c) 2022-present ricky0123')
     expect(text).toContain('Copyright (c) 2020-present Silero Team')
     expect(text).toContain('Copyright (c) Microsoft Corporation')
+    expect(text).toContain('https://gitlab.com/libeigen/eigen')
+  })
+
+  it('ship the notices of the installed onnxruntime-web, Eigen\'s MPL among them', () => {
+    const notices = bytesOf(VAD_ORT_NOTICES).toString('utf8')
+    expect(notices.startsWith('THIRD PARTY SOFTWARE NOTICES AND INFORMATION')).toBe(true)
+    expect(notices).toMatch(/\nEigen\n\nMPL v2\.0\nMozilla Public License Version 2\.0\n/)
+    // NOTICE.md names the file, so a new onnxruntime-web brings a new copy and a new line there.
+    expect(read('NOTICE.md')).toContain(ortNoticesPath(assets.versions['onnxruntime-web']))
   })
 })
 
