@@ -207,7 +207,8 @@ pnpm test:e2e:debug   # Debug mode
 # View reports
 pnpm test:report      # Open HTML report
 
-# Voice input starts from the files the build ships (no LLM server needed)
+# Voice input starts from the files the build ships, and no microphone track stays live once the
+# mic is turned off, also during the detector's load (no LLM server needed)
 pnpm exec playwright test tests/vad-assets.spec.ts --project chromium
 
 # After a deploy: load the live site (or any URL) headless; fails if it does not mount,

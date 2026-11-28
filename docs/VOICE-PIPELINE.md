@@ -22,6 +22,8 @@ Orchestrated in `services/useAgent.ts`; the LLM breath-chunking that paces TTS l
 - **VAD** (`services/vad/`) — `@ricky0123/vad-web`, gates STT so it only listens when you're speaking;
   also the barge-in trigger. Its worklet, model and onnxruntime files ship with the app
   (`scripts/vite-vad-assets.mjs`; `services/vad/vadAssets.ts` gives MicVAD their folder).
+  `services/vad/micVadController.ts` owns the one detector and its microphone tracks: the mic opens
+  only if it is still wanted when the load ends, and turning it off stops the tracks at once.
 - **TTS** (`services/tts/`) — four selectable modes (`TTSConfig.mode`):
   - `browser` — `speechSynthesis`.
   - `local` — a Web Worker running **vits-web** (Piper VITS models) loaded from a CDN.

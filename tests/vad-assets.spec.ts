@@ -15,7 +15,7 @@ test('turning the microphone on starts the voice-activity detector with its own 
   })
   const failures: string[] = []
   page.on('console', (message) => {
-    if (message.text().includes('Failed to initialize VAD')) failures.push(message.text())
+    if (/Failed to (initialize|start) VAD/.test(message.text())) failures.push(message.text())
   })
 
   await page.goto('/')
@@ -36,4 +36,88 @@ test('turning the microphone on starts the voice-activity detector with its own 
     expect(answer.status, answer.file).toBe(200)
     expect(answer.type, answer.file).not.toContain('text/html')
   }
+})
+
+/**
+ * The microphone is off when the app says it is off, also when it was turned off and on while the
+ * detector was still loading. Every track the page ever got from getUserMedia is kept and counted.
+ * The model is held back until the test lets it go, so the taps land inside the load.
+ */
+type MicWindow = Window & { __micTracks: MediaStreamTrack[]; __recognitionStarts: number }
+
+const recordMicrophone = () => {
+  const w = window as unknown as MicWindow
+  w.__micTracks = []
+  w.__recognitionStarts = 0
+  const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    const stream = await getUserMedia(constraints)
+    w.__micTracks.push(...stream.getAudioTracks())
+    return stream
+  }
+  const speech = (window as unknown as { webkitSpeechRecognition?: { prototype: { start: () => void } } })
+    .webkitSpeechRecognition
+  if (speech) {
+    const start = speech.prototype.start
+    speech.prototype.start = function (this: unknown) {
+      w.__recognitionStarts += 1
+      start.call(this)
+    }
+  }
+}
+
+test('turning the microphone off leaves no track live, also after taps while the detector loads', async ({ page }) => {
+  await page.addInitScript(recordMicrophone)
+  let letModelThrough = () => {}
+  const held = new Promise<void>((resolve) => (letModelThrough = resolve))
+  let modelRequests = 0
+  await page.route('**/assets/vad/**/silero_vad_v5.onnx', async (route) => {
+    modelRequests += 1
+    await held
+    await route.continue()
+  })
+  let speechStarts = 0
+  page.on('console', (message) => {
+    if (message.text().includes('Speech started')) speechStarts += 1
+  })
+  const liveTracks = () =>
+    page.evaluate(() => (window as unknown as MicWindow).__micTracks.filter((t) => t.readyState === 'live').length)
+  // The button's name follows the toggle and, while someone is speaking, the detector.
+  const mic = page.getByRole('button', { name: /^(Mic|Mic on|Listening)$/ })
+  const listening = page.locator('[role="status"][aria-label="Listening"]')
+
+  await page.goto('/')
+  await page.getByText('Enable Mic').click({ timeout: 60_000 })
+  await expect.poll(() => modelRequests, { timeout: 45_000 }).toBeGreaterThan(0)
+
+  // Off and on again, the controls hidden and shown (each a re-render), then off: all mid-load.
+  await mic.click()
+  await mic.click()
+  await page.getByRole('button', { name: 'Hide Controls' }).click()
+  await page.getByRole('button', { name: 'Show Controls' }).click()
+  await mic.click()
+  letModelThrough()
+
+  // Long enough for every pending load to finish and, if the app let it, to open the microphone.
+  await page.waitForTimeout(8_000)
+  expect(modelRequests, 'one detector is loaded, however often the app renders').toBe(1)
+  expect(await liveTracks(), 'live microphone tracks with the mic off').toBe(0)
+
+  // The same detector then starts and stops with the button.
+  await mic.click()
+  await expect(listening).toBeAttached({ timeout: 45_000 })
+  await expect.poll(liveTracks).toBe(1)
+  await mic.click()
+  await expect.poll(liveTracks).toBe(0)
+
+  // Quick taps on the loaded detector, ending off.
+  for (let tap = 0; tap < 6; tap += 1) await mic.click()
+  await page.waitForTimeout(1_000)
+  const after = await page.evaluate(() => (window as unknown as MicWindow).__recognitionStarts)
+  speechStarts = 0
+  await page.waitForTimeout(5_000)
+  expect(await liveTracks(), 'live microphone tracks after quick taps').toBe(0)
+  expect(speechStarts, 'speech events with the mic off').toBe(0)
+  expect(await page.evaluate(() => (window as unknown as MicWindow).__recognitionStarts), 'speech recognition starts with the mic off').toBe(after)
+  expect(modelRequests).toBe(1)
 })

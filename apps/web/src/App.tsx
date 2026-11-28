@@ -226,11 +226,15 @@ export const App = () => {
           micError={!agent.state.sttAllowed ? 'Microphone access is unavailable' : null}
           showWaveform={!isMobile}
           style={controlsOpen ? { display: 'none' } : { left: 'calc(10rem + env(safe-area-inset-left))', bottom: 'calc(1.25rem + env(safe-area-inset-bottom))', maxWidth: 'calc(100% - 10rem - 1.25rem)' }}
+          // The pill and the Mic button turn the same setting, so the button never reads off while
+          // the microphone is open.
           onPillClick={() => {
+            AppConfigState.set((prev) => ({ ...prev, microphone: true }))
             agent.actions.toggleMicrophone(true)
             agent.actions.startVADListening()
           }}
           onStopClick={() => {
+            AppConfigState.set((prev) => ({ ...prev, microphone: false }))
             agent.actions.stopSpeaking()
             agent.actions.stopVADListening()
             agent.actions.toggleMicrophone(false)
