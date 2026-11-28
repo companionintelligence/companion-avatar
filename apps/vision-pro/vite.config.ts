@@ -4,6 +4,8 @@ import { defineConfig } from 'vite'
 import { createHtmlPlugin } from 'vite-plugin-html'
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
+import { vadAssets } from '../../scripts/vite-vad-assets.mjs'
+
 // `XR_ENV=avp` marks a build destined for the WebSpatial/visionOS container.
 // The dev:avp, build:avp and publish:avp scripts all set it; a plain `build` or
 // `preview` does not, and gets a self-contained browser bundle.
@@ -32,7 +34,9 @@ export default defineConfig({
       {
         outputDir:""
       }
-    )
+    ),
+    // As in apps/web: packages/core's voice input fetches its worklet, model and onnxruntime files from here.
+    vadAssets()
   ],
   worker: {
     // As in apps/web/vite.config.ts: workers are bundled as ES modules, and the app starts them as module

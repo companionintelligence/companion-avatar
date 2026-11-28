@@ -299,6 +299,11 @@ describe('the rendered notices', () => {
     expect(text).toContain('Required Notice: Copyright LifeScope INC')
   })
 
+  it('credits the Silero model inside @ricky0123/vad-web, which every build ships', () => {
+    expect(text).toMatch(/^Silero VAD model \(silero_vad_v5\.onnx\) as shipped in @ricky0123\/vad-web \d/m)
+    expect(text).toContain('Copyright (c) 2020-present Silero Team')
+  })
+
   it('names packages, never a path on the machine that built it', () => {
     const leaks = text.split('\n').filter((line) => LOCAL_PATH.test(line))
     expect(leaks).toEqual([])

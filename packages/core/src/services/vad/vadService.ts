@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { vadAssetPaths } from './vadAssets'
 import {  defaultVadConfig, type VADConfig, type VADResult } from './vadConfig'
 
 // Type for VAD instance
@@ -59,6 +60,7 @@ export const useVADService = ({
       }
 
       const vad = await MicVAD.new({
+        ...vadAssetPaths(),
         positiveSpeechThreshold: config.vadThreshold,
         minSpeechMs: 300,
         preSpeechPadMs: 100, // Changed from preSpeechPadFrames to preSpeechPadMs

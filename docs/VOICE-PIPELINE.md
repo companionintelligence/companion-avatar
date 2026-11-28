@@ -20,7 +20,8 @@ Orchestrated in `services/useAgent.ts`; the LLM breath-chunking that paces TTS l
 - **STT** (`services/stt/`) — browser **Web Speech API** (`SpeechRecognition`), `en-US`, continuous.
   Optional `remote` flag exists but no remote STT is wired.
 - **VAD** (`services/vad/`) — `@ricky0123/vad-web`, gates STT so it only listens when you're speaking;
-  also the barge-in trigger.
+  also the barge-in trigger. Its worklet, model and onnxruntime files ship with the app
+  (`scripts/vite-vad-assets.mjs`; `services/vad/vadAssets.ts` gives MicVAD their folder).
 - **TTS** (`services/tts/`) — four selectable modes (`TTSConfig.mode`):
   - `browser` — `speechSynthesis`.
   - `local` — a Web Worker running **vits-web** (Piper VITS models) loaded from a CDN.

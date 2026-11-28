@@ -3,7 +3,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_SETTLE_MS, DEFAULT_TIMEOUT_MS, DEFAULT_URL, allowRule, originOf, parseArgs, sortRequests } from './smoke-live.mjs'
+import { DEFAULT_SETTLE_MS, DEFAULT_TIMEOUT_MS, DEFAULT_URL, allowRule, checkVadAssets, originOf, parseArgs, sortRequests } from './smoke-live.mjs'
+import { VAD_MANIFEST, readVadAssets, vadManifest } from './vite-vad-assets.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
@@ -93,6 +94,73 @@ describe('sortRequests', () => {
     )
     expect(sameOrigin).toBe(2)
     expect(thirdParty).toEqual([])
+  })
+})
+
+describe('checkVadAssets', () => {
+  const site = 'https://avatar.ci.computer/'
+  const assets = readVadAssets()
+  const types = { js: 'application/javascript', mjs: 'application/javascript', wasm: 'application/wasm', json: 'application/json' }
+  const typeOf = (url) => types[url.split('.').pop()] ?? 'application/octet-stream'
+  const answer = (type, { status = 200, url, body } = {}) => ({ status, url, headers: new Headers({ 'content-type': type }), json: async () => JSON.parse(body) })
+  /** A host serving this build, with `broken` replacing its answers for some paths. */
+  const host = (broken = {}) => {
+    const asked = []
+    const fetchImpl = async (url, init) => {
+      asked.push(`${init?.method ?? 'GET'} ${url}`)
+      const name = url.split('/').pop()
+      return broken[name] ?? answer(typeOf(url), { url, body: name === VAD_MANIFEST ? vadManifest(assets) : undefined })
+    }
+    return { asked, fetchImpl }
+  }
+  // What Cloudflare Pages answered for every one of these files before they shipped.
+  const spaFallback = answer('text/html; charset=utf-8', { body: '<!doctype html>' })
+
+  it('passes a deploy that serves every file the detector asks for, by HEAD', async () => {
+    const { asked, fetchImpl } = host()
+    const { urls, problems } = await checkVadAssets(`${site}?env=datacenter-1970s`, fetchImpl)
+    expect(problems).toEqual([])
+    expect(urls).toContain(`${site}${assets.dir}/silero_vad_v5.onnx`)
+    expect(asked[0]).toBe(`GET ${site}${VAD_MANIFEST}`)
+    expect(asked.slice(1).every((line) => line.startsWith('HEAD '))).toBe(true)
+    expect(asked).toHaveLength(1 + assets.files.length)
+  })
+
+  it.each(['silero_vad_v5.onnx', 'vad.worklet.bundle.min.js', 'ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm'])(
+    'fails when %s comes back as a web page',
+    async (name) => {
+      const { problems } = await checkVadAssets(site, host({ [name]: spaFallback }).fetchImpl)
+      expect(problems).toHaveLength(1)
+      expect(problems[0]).toContain(`${name} is a web page`)
+    }
+  )
+
+  it('fails a deploy with no list, which is one that shipped no files', async () => {
+    const { problems } = await checkVadAssets(site, host({ [VAD_MANIFEST]: spaFallback }).fetchImpl)
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toContain(`${VAD_MANIFEST} is a web page`)
+  })
+
+  it('fails a list that leaves a file out, is empty or is not a list', async () => {
+    for (const body of ['{"files":[]}', '{}', 'nonsense']) {
+      const { problems } = await checkVadAssets(site, host({ [VAD_MANIFEST]: answer('application/json', { body }) }).fetchImpl)
+      expect(problems.length, body).toBeGreaterThan(0)
+    }
+  })
+
+  it('fails a missing file, a wrong type and an answer from another origin', async () => {
+    const broken = {
+      'silero_vad_v5.onnx': answer('text/plain', { status: 404 }),
+      'ort-wasm-simd-threaded.mjs': answer('application/octet-stream'),
+      'ort-wasm-simd-threaded.wasm': answer('application/octet-stream'),
+      'vad.worklet.bundle.min.js': answer('application/javascript', { url: 'https://cdn.jsdelivr.net/vad.worklet.bundle.min.js' })
+    }
+    const { problems } = await checkVadAssets(site, host(broken).fetchImpl)
+    expect(problems.join('\n')).toMatch(/silero_vad_v5\.onnx answered 404/)
+    expect(problems.join('\n')).toMatch(/\.mjs has the type "application\/octet-stream", not a JavaScript type/)
+    expect(problems.join('\n')).toMatch(/\.wasm has the type "application\/octet-stream", not application\/wasm/)
+    expect(problems.join('\n')).toMatch(/was sent on to https:\/\/cdn\.jsdelivr\.net/)
+    expect(problems).toHaveLength(4)
   })
 })
 

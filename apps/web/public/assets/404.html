@@ -1,0 +1,18 @@
+<!doctype html>
+<!--
+  Cloudflare Pages serves the closest 404.html for a path under it that matches no file, with status
+  404. Without this one a missing file under /assets/ got the app's index.html with status 200 (the
+  single-page-app fallback, which still applies everywhere else because there is no top-level
+  404.html), so a script, model or .wasm that did not ship looked like a successful download.
+  https://developers.cloudflare.com/pages/configuration/serving-pages/
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Not found</title>
+  </head>
+  <body>
+    <p>Not found. <a href="/">Avatar Companion</a></p>
+  </body>
+</html>

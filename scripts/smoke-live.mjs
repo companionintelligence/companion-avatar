@@ -1,12 +1,18 @@
 /**
- * smoke-live.mjs — load a deployed copy of the web app in headless Chromium, and fail when it does not mount or
- * when it asks any origin but its own for anything.
+ * smoke-live.mjs — load a deployed copy of the web app in headless Chromium, and fail when it does not mount,
+ * when it asks any origin but its own for anything, or when its voice-input files are not there.
  *
  * On 2026-11-24 avatar.ci.computer went blank because the scene took its studio light from raw.githack.com and
  * that host failed (see packages/core/src/components/scene/environment/StudioEnvironment.tsx). The app now serves
  * its own light and its own local engines; this checks that a deploy does too, from a real browser against the
  * real host. The page must mount (a canvas in #root), still be mounted once the network has settled, and every
  * request it made, its workers' included, must have gone to the page's own origin.
+ *
+ * On 2026-11-27 voice input could not start on the live site: the voice-activity detector's worklet, model and
+ * onnxruntime files were in no build, and the host answered for each with index.html and status 200. The page
+ * asks for them only once someone turns the microphone on, so this reads the list the build wrote
+ * (vad-assets.json, scripts/vite-vad-assets.mjs) and sends a HEAD request for every file: each must answer 200
+ * from the page's origin, never as text/html, and the scripts and the .wasm with the type a browser requires.
  *
  * Usage:
  *   node scripts/smoke-live.mjs [url] [--allow <origin>]... [--settle <ms>] [--timeout <ms>]
@@ -23,14 +29,17 @@
  *              app never reads (the live site's /config.json is one), would otherwise hold it to --timeout.
  *   --timeout  How long the page has to mount, and then to stop starting requests, in ms (default 60000).
  *
- * Exit status: 0 when the app mounted, stayed mounted and asked no other origin for anything; 1 when it did not;
+ * Exit status: 0 when the app mounted, stayed mounted, asked no other origin for anything and has its voice-input
+ * files; 1 when it did not;
  * 2 when the check could not run (a bad argument, no browser, a page that would not load).
  *
- * It only reads: it loads the page once, as a visitor would, and presses nothing. Requests to other origins are
+ * It only reads: it loads the page once, as a visitor would, presses nothing, and asks for the voice files' headers. Requests to other origins are
  * let through and recorded, not blocked, so the page behaves as it does for everyone. It needs Playwright's
  * Chromium (pnpm exec playwright install chromium). .github/workflows/smoke-live.yml runs it on demand.
  */
 import { pathToFileURL } from 'node:url'
+
+import { VAD_FILES, VAD_MANIFEST } from './vite-vad-assets.mjs'
 
 export const DEFAULT_URL = 'https://avatar.ci.computer'
 export const DEFAULT_SETTLE_MS = 5_000
@@ -91,6 +100,56 @@ export function sortRequests(requests, own, allow = []) {
     else thirdParty.push({ ...request, origin })
   }
   return { sameOrigin, allowed, thirdParty }
+}
+
+/** The types a browser requires to run a script (the worklet, the .mjs loader) and to compile the .wasm as it arrives. */
+const REQUIRED_TYPES = [
+  { file: /\.m?js$/, type: /^(?:text|application)\/javascript\b/i, name: 'a JavaScript type' },
+  { file: /\.wasm$/, type: /^application\/wasm\b/i, name: 'application/wasm' }
+]
+
+/** What is wrong with the answer for one URL, or null. `own` is the origins an answer may come from. */
+function badAnswer(url, response, own) {
+  const type = response.headers.get('content-type') ?? ''
+  if (response.url && !own.includes(originOf(response.url))) return `${url} was sent on to ${originOf(response.url)}`
+  if (/^text\/html\b/i.test(type)) return `${url} is a web page (${response.status} ${type}), not the file: it was not shipped, and the host answered with HTML`
+  if (response.status !== 200) return `${url} answered ${response.status}`
+  const rule = REQUIRED_TYPES.find(({ file }) => file.test(new URL(url).pathname))
+  if (rule && !rule.type.test(type)) return `${url} has the type "${type}", not ${rule.name}`
+  return null
+}
+
+/**
+ * The deploy's voice-input files, from its vad-assets.json beside the page. Returns the URLs checked and the
+ * problems, empty when every file the detector asks for is listed and served as itself.
+ */
+export async function checkVadAssets(pageUrl, fetchImpl = fetch) {
+  const own = [originOf(pageUrl)]
+  const manifestUrl = new URL(`./${VAD_MANIFEST}`, pageUrl).href
+  const urls = [manifestUrl]
+  const problems = []
+
+  const manifest = await fetchImpl(manifestUrl)
+  const wrong = badAnswer(manifestUrl, manifest, own)
+  if (wrong) return { urls, problems: [wrong] }
+  let files
+  try {
+    files = (await manifest.json()).files
+  } catch {
+    return { urls, problems: [`${manifestUrl} is not JSON`] }
+  }
+  if (!Array.isArray(files)) return { urls, problems: [`${manifestUrl} lists no files`] }
+
+  for (const { name } of VAD_FILES) {
+    if (!files.some((file) => String(file).endsWith(`/${name}`))) problems.push(`${manifestUrl} does not list ${name}`)
+  }
+  for (const file of files) {
+    const url = new URL(String(file), manifestUrl).href
+    urls.push(url)
+    const problem = badAnswer(url, await fetchImpl(url, { method: 'HEAD' }), own)
+    if (problem) problems.push(problem)
+  }
+  return { urls, problems }
 }
 
 /** The command line and environment, read into options. Throws on a bad argument. */
@@ -202,8 +261,14 @@ export async function run(options, log = console.log) {
       const origins = [...new Set(thirdParty.map((r) => r.origin))]
       log(`  FAIL: the page asked ${origins.length === 1 ? 'another origin' : `${origins.length} other origins`} for something: ${origins.join(', ')}`)
     }
-    if (!mounted || thirdParty.length) return 1
-    log(`  OK: mounted, stayed mounted, and asked no origin but ${ownOrigins}${allowed.length ? ' (and the allowed ones)' : ''} for anything`)
+    // The page's own origin after any redirect, which is where a visitor's browser would ask.
+    const voice = await checkVadAssets(page.url())
+    log(`  voice input: ${voice.urls.length} URLs checked, ${voice.problems.length} wrong`)
+    for (const problem of voice.problems) log(`    ${problem}`)
+    if (voice.problems.length) log('  FAIL: voice input cannot start on this deploy')
+
+    if (!mounted || thirdParty.length || voice.problems.length) return 1
+    log(`  OK: mounted, stayed mounted, asked no origin but ${ownOrigins}${allowed.length ? ' (and the allowed ones)' : ''} for anything, and has its voice-input files`)
     return 0
   } finally {
     await browser.close()

@@ -5,6 +5,8 @@
  * are working correctly. These can be run from the browser console.
  */
 
+import { vadAssetPaths } from '../services/vad/vadAssets'
+
 // Test VAD Service
 export const testVAD = async () => {
   console.log('Testing VAD Service...')
@@ -16,6 +18,7 @@ export const testVAD = async () => {
 
     // Test VAD initialization
     const vad = await MicVAD.new({
+      ...vadAssetPaths(),
       model: 'v5',
       onSpeechStart: () => console.log('🎤 Speech detected'),
       onSpeechEnd: (audio) => console.log('🔇 Speech ended, audio length:', audio.length)

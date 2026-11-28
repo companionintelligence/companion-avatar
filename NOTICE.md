@@ -159,6 +159,22 @@ for no credit; it is given because it is due. The distribution decision above
 is not what lets the apps ship it, and it does not restrict it: anyone may
 reuse this file.
 
+## Voice activity detection
+
+Every build of the app ships these files unmodified from the npm packages that
+`pnpm-lock.yaml` pins, under `assets/vad/` (`scripts/vite-vad-assets.mjs`),
+with their licence texts beside them (`LICENSES.txt`, from
+`scripts/third-party/licenses/voice-activity.txt`).
+
+| File | From | Licence |
+| --- | --- | --- |
+| `vad.worklet.bundle.min.js` | [`@ricky0123/vad-web`](https://github.com/ricky0123/vad) | ISC, Copyright (c) 2022-present ricky0123 |
+| `silero_vad_v5.onnx` | [Silero VAD](https://github.com/snakers4/silero-vad), distributed in `@ricky0123/vad-web` | MIT, Copyright (c) 2020-present Silero Team |
+| `ort-wasm-simd-threaded.mjs`, `ort-wasm-simd-threaded.wasm` | [`onnxruntime-web`](https://github.com/microsoft/onnxruntime) | MIT, Copyright (c) Microsoft Corporation |
+
+The `.wasm` also holds the libraries ONNX Runtime is built with; their notices
+are in `ThirdPartyNotices.txt` in the ONNX Runtime repository.
+
 ## First-party code
 
 Except as noted above, the contents of this repository are

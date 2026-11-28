@@ -1,7 +1,8 @@
 name: Smoke-check the live site
 
-# Loads a deployed copy of the web app in headless Chromium and fails when it does not mount, or when it asks
-# any origin but its own for anything (scripts/smoke-live.mjs). Run it after a deploy:
+# Loads a deployed copy of the web app in headless Chromium and fails when it does not mount, when it asks
+# any origin but its own for anything, or when its voice-input files are missing or served as a web page
+# (scripts/smoke-live.mjs). Run it after a deploy:
 #
 #   gh workflow run smoke-live.yml
 #   gh workflow run smoke-live.yml -f url=https://<branch>.avatars-zbe.pages.dev -f allow='https://*.arweave.net'
